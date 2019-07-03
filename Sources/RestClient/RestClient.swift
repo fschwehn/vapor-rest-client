@@ -181,6 +181,64 @@ open class RestClient {
             })
     }
     
+    /// Performs a GET request and decodes the JSON response body
+    public func get<Return>(url: String,
+                            query: Query? = nil,
+                            headers: HTTPHeaders = HTTPHeaders(),
+                            decoder: JSONDecoder? = nil,
+                            as: Return.Type)
+        throws -> Future<Return>
+        where Return: Decodable
+    {
+        return try request(method: .GET, url: url, query: query, headers: headers)
+            .flatMap({ (request, response) in
+                try response.content
+                    .decode(json: Return.self, using: decoder ?? self.defaultDecoder)
+                    .catchFlatMap({ error in
+                        throw RequestError.wrap(error, request, response)
+                    })
+            })
+    }
+    
+    /// Performs a GET request and decodes the JSON response body
+    ///
+    /// This function does not trhrow errors if the requested resource does not exist
+    /// (means if status code of the response is 404 - not found).
+    public func get<Return>(url: String,
+                            query: Query? = nil,
+                            headers: HTTPHeaders = HTTPHeaders(),
+                            decoder: JSONDecoder? = nil,
+                            as: Return?.Type)
+        throws -> Future<Return?>
+        where Return: Decodable
+    {
+        let url = try resolve(url: url, query: query)
+        let httpRequest = HTTPRequest(url: url, headers: headers)
+        let request = Request(http: httpRequest, using: self.container)
+        let responder = self.responder ?? self
+        
+        return try responder
+            .respond(to: request)
+            .flatMap({ response in
+                if response.http.status == .notFound {
+                    return self.container.future(.none)
+                }
+                
+                return try response.content
+                    .decode(json: Return.self, using: decoder ?? self.defaultDecoder)
+                    .map({ .some($0) })
+            })
+            .catchFlatMap({ error in
+                if let error = error as? RequestError {
+                    if error.response?.http.status == .notFound {
+                       return request.future(.none)
+                    }
+                }
+                
+                throw RequestError.wrap(error, request)
+            })
+    }
+    
 }
 
 // MARK: - private

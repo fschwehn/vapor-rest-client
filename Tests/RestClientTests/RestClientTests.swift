@@ -3,6 +3,11 @@ import Vapor
 
 @testable import RestClient
 
+struct Book: Content {
+    let name: String
+    let pages: Int
+}
+
 struct TestClient: Client {
     
     let container: Container
@@ -17,6 +22,10 @@ struct TestClient: Client {
                 let res = Response(http: http, using: req)
                 let query = try req.query.decode([String:String].self)
                 try! res.content.encode(query)
+                return req.future(res)
+            case "/books/existing":
+                let res = Response(http: http, using: req)
+                try! res.content.encode(Book(name: "Swift for Beginners", pages: 42))
                 return req.future(res)
             default:
                 http.status = .notFound
@@ -77,11 +86,30 @@ final class RestClientTests: XCTestCase {
         let result = try client.request(url: url, query: query, as: [String:String].self).wait()
         XCTAssertEqual(query, result)
     }
+    
+    func test_getExistingJsonResource() throws {
+        let book = try client.get(url: "/books/existing", as: Book.self).wait()
+        XCTAssertEqual(book.name, "Swift for Beginners")
+        XCTAssertEqual(book.pages, 42)
+    }
+    
+    func test_getNonExistingJsonResourceWithErrorTransformer() throws {
+        let book = try client.get(url: "/books/non-existing", as: Book?.self).wait()
+        XCTAssertNil(book)
+    }
+    
+    func test_getNonExistingJsonResourceWithoutErrorTransformer() throws {
+        client.middlewares = []
+        let book = try client.get(url: "/books/non-existing", as: Book?.self).wait()
+        XCTAssertNil(book)
+    }
 
     static let allTests = [
         ("test_200", test_200),
         ("test_404", test_404),
         ("test_query", test_query),
+        ("test_getNonExistingJsonResourceWithErrorTransformer", test_getNonExistingJsonResourceWithErrorTransformer),
+        ("test_getNonExistingJsonResourceWithoutErrorTransformer", test_getNonExistingJsonResourceWithoutErrorTransformer),
     ]
     
 }
