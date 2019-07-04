@@ -221,7 +221,7 @@ open class RestClient {
             .respond(to: request)
             .flatMap({ response in
                 if response.http.status == .notFound {
-                    return self.container.future(.none)
+                    return request.future(.none)
                 }
                 
                 return try response.content
