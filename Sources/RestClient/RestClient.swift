@@ -18,26 +18,13 @@ open class RestClient {
     public let hostUrl: URL
     
     /// Middleware stack for request processing
-    public var middlewares = [Middleware]() {
-        didSet {
-            if middlewares.isEmpty {
-                responder = nil
-            }
-            else {
-                responder = middlewares.makeResponder(chainingTo: self)
-            }
-        }
-    }
+    public var middleware = [Middleware]()
     
     public var defaultDecoder: JSONDecoder = JSONDecoder()
     
     public var defaultEncoder: JSONEncoder = JSONEncoder()
     
     private let client: Client
-    
-    /// The `Responder` resulting of the middleware stack
-    private var responder: Responder?
-    
     
     /// Creates a `RestClient`
     ///
@@ -55,6 +42,22 @@ open class RestClient {
         self.hostUrl = url
     }
     
+    /// Kernel function - sends a `Request` down the responder chain of our `middleware`
+    func send(_ req: Request) -> Future<Response> {
+        let responder = middleware.makeResponder(chainingTo: self)
+        let promise = container.eventLoop.newPromise(Response.self)
+        
+        container.eventLoop.execute {
+            do {
+                try responder.respond(to: req).cascade(promise: promise)
+            }
+            catch {
+                promise.fail(error: error)
+            }
+        }
+        
+        return promise.futureResult
+    }
     
     /// Performs a request
     public func request(method: HTTPMethod = .GET,
@@ -67,10 +70,8 @@ open class RestClient {
         let url = try resolve(url: url, query: query)
         let httpRequest = HTTPRequest(method: method, url: url, headers: headers, body: body)
         let request = Request(http: httpRequest, using: self.container)
-        let responder = self.responder ?? self
         
-        return try responder
-            .respond(to: request)
+        return send(request)
             .map({ response in (request, response) })
             .catchMap({ error in throw RequestError.wrap(error, request) })
     }
@@ -142,9 +143,7 @@ open class RestClient {
             throw RequestError.wrap(error, request)
         }
         
-        let responder = self.responder ?? self
-        
-        return try responder.respond(to: request)
+        return send(request)
     }
     
     /// Performs a request with JSON paylod and JSON response
@@ -170,10 +169,7 @@ open class RestClient {
             throw RequestError.wrap(error, request)
         }
         
-        let responder = self.responder ?? self
-        
-        return try responder
-            .respond(to: request)
+        return send(request)
             .flatMap({ response in
                 try response.content
                     .decode(json: Return.self, using: decoder ?? self.defaultDecoder)
@@ -215,10 +211,8 @@ open class RestClient {
         let url = try resolve(url: url, query: query)
         let httpRequest = HTTPRequest(url: url, headers: headers)
         let request = Request(http: httpRequest, using: self.container)
-        let responder = self.responder ?? self
         
-        return try responder
-            .respond(to: request)
+        return send(request)
             .flatMap({ response in
                 if response.http.status == .notFound {
                     return request.future(.none)
@@ -281,7 +275,7 @@ private extension RestClient {
         
         return urlString
     }
-
+    
     static func errorId(_ id: String) -> String {
         return "RestClient.\(id)"
     }
