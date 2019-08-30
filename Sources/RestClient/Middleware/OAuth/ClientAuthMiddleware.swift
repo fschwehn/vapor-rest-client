@@ -99,7 +99,7 @@ open class ClientAuthMiddleware<Session>: Middleware where Session: OAuthSession
             return pendingRefresh
         }
         
-        return try container.client()
+        let newRefreshTokenFuture = try container.client()
             .post(accessTokenUrl, beforeSend: { (req) in
                 let body = session.tokenRequestBody(clientId: clientId, clientSecret: clientSecret)
                 try req.content.encode(body, as: .formData)
@@ -117,6 +117,10 @@ open class ClientAuthMiddleware<Session>: Middleware where Session: OAuthSession
             .always({
                 self.refreshTokenFuture = nil
             })
+        
+        refreshTokenFuture = newRefreshTokenFuture
+        
+        return newRefreshTokenFuture
     }
     
 }
