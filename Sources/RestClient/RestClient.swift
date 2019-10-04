@@ -42,6 +42,43 @@ open class RestClient {
         self.hostUrl = url
     }
     
+    /// Resolves a given (incomplete) URL to `hostUrl`
+    ///
+    /// - Parameters:
+    ///   - url: The URL to resolve
+    ///   - query: optional query to append
+    /// - Returns: resolved URL
+    public func resolve(url: String, query: Query?) throws -> String {
+        let hostUrlString = hostUrl.absoluteString
+        var urlString = url.starts(with: hostUrlString)
+            ? url
+            : hostUrlString + url
+        
+        if let query = query {
+            guard var comps = URLComponents(string: urlString) else {
+                throw VaporError(identifier: RestClient.errorId("resolveUrl"), reason: "Failed to form URLComponents from String '\(urlString)'")
+            }
+            
+            if !query.isEmpty {
+                var queryItems = comps.queryItems ?? [URLQueryItem]()
+                
+                for (name, value) in query {
+                    queryItems.append(URLQueryItem(name: name, value: value))
+                }
+                
+                comps.queryItems = queryItems
+                
+                guard let parsedUrl = comps.url else {
+                    throw VaporError(identifier: RestClient.errorId("resolveQuery"), reason: "Failed to form URL from URLComponents \(comps)")
+                }
+                
+                urlString = parsedUrl.absoluteString
+            }
+        }
+        
+        return urlString
+    }
+    
     /// Kernel function - sends a `Request` down the responder chain of our `middleware`
     func send(_ req: Request) -> Future<Response> {
         let responder = middleware.makeResponder(chainingTo: self)
@@ -238,43 +275,6 @@ open class RestClient {
 // MARK: - private
 
 private extension RestClient {
-    
-    /// Resolves a given (incomplete) URL to `hostUrl`
-    ///
-    /// - Parameters:
-    ///   - url: The URL to resolve
-    ///   - query: optional query to append
-    /// - Returns: resolved URL
-    func resolve(url: String, query: Query?) throws -> String {
-        let hostUrlString = hostUrl.absoluteString
-        var urlString = url.starts(with: hostUrlString)
-            ? url
-            : hostUrlString + url
-        
-        if let query = query {
-            guard var comps = URLComponents(string: urlString) else {
-                throw VaporError(identifier: RestClient.errorId("resolveUrl"), reason: "Failed to form URLComponents from String '\(urlString)'")
-            }
-            
-            if !query.isEmpty {
-                var queryItems = comps.queryItems ?? [URLQueryItem]()
-                
-                for (name, value) in query {
-                    queryItems.append(URLQueryItem(name: name, value: value))
-                }
-                
-                comps.queryItems = queryItems
-                
-                guard let parsedUrl = comps.url else {
-                    throw VaporError(identifier: RestClient.errorId("resolveQuery"), reason: "Failed to form URL from URLComponents \(comps)")
-                }
-                
-                urlString = parsedUrl.absoluteString
-            }
-        }
-        
-        return urlString
-    }
     
     static func errorId(_ id: String) -> String {
         return "RestClient.\(id)"
