@@ -7,9 +7,9 @@
 
 import Vapor
 
-enum ClientAuthMiddlewareError: Debuggable {
+public enum ClientAuthMiddlewareError: Debuggable {
     
-    var identifier: String {
+    public var identifier: String {
         switch self {
         case .authenticationFailedAfterTooManyRetrials(_):
             return "ClientAuthMiddlewareError.authenticationFailedAfterTooManyRetrials"
@@ -18,7 +18,7 @@ enum ClientAuthMiddlewareError: Debuggable {
         }
     }
     
-    var reason: String {
+    public var reason: String {
         switch self {
         case .authenticationFailedAfterTooManyRetrials(let url):
             return "Authentication failed after too many retrials (\(url))"
@@ -36,11 +36,12 @@ enum ClientAuthMiddlewareError: Debuggable {
 open class ClientAuthMiddleware<Session>: Middleware where Session: OAuthSession {
 
     public let container: Container
+    public let clientId: String
+    public let clientSecret: String
+    
     private(set) var accessTokenUrl: URLRepresentable
     private(set) var session: Session
     
-    private let clientId: String
-    private let clientSecret: String
     private var refreshTokenFuture: EventLoopFuture<String>?
     
     public init(container: Container,
@@ -56,7 +57,7 @@ open class ClientAuthMiddleware<Session>: Middleware where Session: OAuthSession
         self.session = session
     }
     
-    public func respond(to request: Request, chainingTo next: Responder) throws -> EventLoopFuture<Response> {
+    open func respond(to request: Request, chainingTo next: Responder) throws -> EventLoopFuture<Response> {
         return try token(container: request)
             .flatMap({ (token) -> EventLoopFuture<Response> in
                 return try self.respond(to: request, token: token, chainingTo: next, trialsLeft: 3)
