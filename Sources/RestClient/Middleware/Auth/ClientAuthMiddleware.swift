@@ -67,7 +67,7 @@ open class ClientAuthMiddleware<Session>: RestClientMiddleware where Session: OA
     }
     
     private func token() -> EventLoopFuture<String> {
-        guard session.expiresAt < Date() else {
+        guard session.expiresAt > Date() else {
             return refreshToken()
         }
         
