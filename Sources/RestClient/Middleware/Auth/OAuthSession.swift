@@ -15,6 +15,6 @@ public protocol OAuthSession: class {
     
     func tokenRequestBody(clientId: String, clientSecret: String) -> [String:String]
     func update(with content: Vapor.ContentContainer, on eventLoop: EventLoop) -> EventLoopFuture<Self>
-//    func saveState(on container: Container) -> EventLoopFuture<Self>
+    func saveState(on eventLoop: EventLoop) -> EventLoopFuture<Self>
     
 }
