@@ -6,7 +6,6 @@
 //
 
 import Vapor
-import AsyncKit
 
 public enum RestClientError: LocalizedError {
     case failedToResolveUrl(_: String)
