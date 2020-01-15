@@ -3,7 +3,7 @@ import Vapor
 
 @testable import RestClient
 
-struct Book: Content {
+struct Book: Content, Equatable {
     let name: String
     let pages: Int
 }
@@ -26,7 +26,10 @@ struct TestClient: Client {
             
             switch request.method {
             case .POST:
-                break
+                let book = try request.content.decode(Book.self)
+                var res = ClientResponse()
+                try res.content.encode(book)
+                return eventLoopGroup.future(res)
             default:
                 switch request.url.path {
                 case "/ok":
@@ -81,6 +84,22 @@ final class RestClientTests: XCTestCase {
             StatusCodeToErrorTransformer()
         ]
     }
+    
+    static let allTests = [
+        ("test_realClient", test_realClient),
+        ("test_send", test_send),
+        ("test_middleware", test_middleware),
+        ("test_200", test_200),
+        ("test_404", test_404),
+        ("test_query", test_query),
+        ("test_getExistingJsonResource", test_getExistingJsonResource),
+        ("test_getNonExistingJsonResourceWithErrorTransformer", test_getNonExistingJsonResourceWithErrorTransformer),
+        ("test_getNonExistingJsonResourceWithoutErrorTransformer", test_getNonExistingJsonResourceWithoutErrorTransformer),
+        ("test_getTextUsing_get", test_getTextUsing_get),
+        ("test_getTextUsing_request", test_getTextUsing_request),
+        ("test_post", test_post),
+        ("test_postWithJSONReturn", test_postWithJSONReturn),
+    ]
 
     func test_realClient() throws {
         let client = app.client
@@ -168,19 +187,16 @@ final class RestClientTests: XCTestCase {
         XCTAssertEqual(text, "read me")
     }
     
-//    func test_post() throws {
-//        let book = Book(name: "A History of Gallifrey", pages: 13)
-//        let response = try client.request(method: .POST, url: "/books", json: book).wait()
-//        print(response)
-////        XCTAssertEqual(text, "read me")
-//    }
+    func test_post() throws {
+        let book = Book(name: "A History of Gallifrey", pages: 13)
+        let response = try client.request(method: .POST, url: "/books", json: book).wait()
+        XCTAssertEqual(response.status, .ok)
+    }
     
-//    static let allTests = [
-//        ("test_200", test_200),
-//        ("test_404", test_404),
-//        ("test_query", test_query),
-//        ("test_getNonExistingJsonResourceWithErrorTransformer", test_getNonExistingJsonResourceWithErrorTransformer),
-//        ("test_getNonExistingJsonResourceWithoutErrorTransformer", test_getNonExistingJsonResourceWithoutErrorTransformer),
-//    ]
-//
+    func test_postWithJSONReturn() throws {
+        let bookIn = Book(name: "A History of Gallifrey", pages: 13)
+        let bookOut = try client.request(method: .POST, url: "/books", json: bookIn, as: Book.self).wait()
+        XCTAssertEqual(bookIn, bookOut)
+    }
+    
 }
