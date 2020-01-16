@@ -101,14 +101,19 @@ open class RestClient {
                         query: Query? = nil,
                         headers: HTTPHeaders = HTTPHeaders(),
                         body: ByteBuffer? = nil)
-        throws -> EventLoopFuture<(ClientRequest, ClientResponse)>
+        -> EventLoopFuture<(ClientRequest, ClientResponse)>
     {
-        let uri = try resolve(url: url, query: query)
-        let request = ClientRequest(method: method, url: uri, headers: headers, body: body)
-        
-        return send(request)
-            .map({ response in (request, response) })
-            .mapErrorToClientRequestError(request: request)
+        do {
+            let uri = try resolve(url: url, query: query)
+            let request = ClientRequest(method: method, url: uri, headers: headers, body: body)
+            
+            return send(request)
+                .map({ response in (request, response) })
+                .mapErrorToClientRequestError(request: request)
+        }
+        catch {
+            return eventLoop.makeFailedFuture(error)
+        }
     }
     
     /// Performs a request and decodes the JSON response body
@@ -118,10 +123,10 @@ open class RestClient {
                                 headers: HTTPHeaders = HTTPHeaders(),
                                 decoder: JSONDecoder? = nil,
                                 as: Return.Type)
-        throws -> EventLoopFuture<Return>
+        -> EventLoopFuture<Return>
         where Return: Decodable
     {
-        return try request(method: method, url: url, query: query, headers: headers)
+        return request(method: method, url: url, query: query, headers: headers)
             .flatMapThrowing({ try self.decodeResponseBody(request: $0, response: $1) })
     }
     
@@ -133,37 +138,42 @@ open class RestClient {
                                 headers: HTTPHeaders = HTTPHeaders(),
                                 decoder: JSONDecoder? = nil,
                                 as: Return?.Type)
-        throws -> EventLoopFuture<Return?>
+        -> EventLoopFuture<Return?>
         where Return: Decodable
     {
-        let url = try resolve(url: url, query: query)
-        let request = ClientRequest(url: url, headers: headers)
-        let promise = eventLoop.makePromise(of: Return?.self)
-
-        send(request)
-            .flatMapThrowing({ response -> Return? in
-                if response.status == .notFound {
-                    return .none
-                }
-
-                return try self.decodeResponseBody(request: request, response: response)
-            })
-            .whenComplete({ result in
-                switch result {
-                case .success(let value):
-                    promise.succeed(value)
-
-                case .failure(let error):
-                    if let error = error as? ClientRequestError {
-                        if error.response?.status == .notFound {
-                            return promise.succeed(nil)
-                        }
+        do {
+            let url = try resolve(url: url, query: query)
+            let request = ClientRequest(url: url, headers: headers)
+            let promise = eventLoop.makePromise(of: Return?.self)
+            
+            send(request)
+                .flatMapThrowing({ response -> Return? in
+                    if response.status == .notFound {
+                        return .none
                     }
-                    promise.fail(error)
-                }
-            })
-
-        return promise.futureResult
+                    
+                    return try self.decodeResponseBody(request: request, response: response)
+                })
+                .whenComplete({ result in
+                    switch result {
+                    case .success(let value):
+                        promise.succeed(value)
+                        
+                    case .failure(let error):
+                        if let error = error as? ClientRequestError {
+                            if error.response?.status == .notFound {
+                                return promise.succeed(nil)
+                            }
+                        }
+                        promise.fail(error)
+                    }
+                })
+            
+            return promise.futureResult
+        }
+        catch {
+            return eventLoop.makeFailedFuture(error)
+        }
     }
 
     /// Performs a request with JSON payload
@@ -173,19 +183,24 @@ open class RestClient {
                               json: Send,
                               encoder: JSONEncoder? = nil,
                               headers: HTTPHeaders = HTTPHeaders())
-        throws -> EventLoopFuture<ClientResponse> where Send: Encodable
+        -> EventLoopFuture<ClientResponse> where Send: Encodable
     {
-        let url = try resolve(url: url, query: query)
-        var request = ClientRequest(method: method, url: url, headers: headers)
-
         do {
-            try request.content.encode(json, using: encoder ?? defaultEncoder)
+            let url = try resolve(url: url, query: query)
+            var request = ClientRequest(method: method, url: url, headers: headers)
+            
+            do {
+                try request.content.encode(json, using: encoder ?? defaultEncoder)
+            }
+            catch {
+                throw ClientRequestError.wrap(error, request)
+            }
+            
+            return send(request)
         }
         catch {
-            throw ClientRequestError.wrap(error, request)
+            return eventLoop.makeFailedFuture(error)
         }
-
-        return send(request)
     }
 
     /// Performs a request with JSON paylod and JSON response
@@ -197,25 +212,30 @@ open class RestClient {
                                       decoder: JSONDecoder? = nil,
                                       headers: HTTPHeaders = HTTPHeaders(),
                                       as: Return.Type)
-        throws -> EventLoopFuture<Return>
+        -> EventLoopFuture<Return>
         where Send: Encodable, Return: Decodable
     {
-        let url = try resolve(url: url, query: query)
-        var request = ClientRequest(method: method, url: url, headers: headers)
-
         do {
-            try request.content.encode(json, using: encoder ?? defaultEncoder)
+            let url = try resolve(url: url, query: query)
+            var request = ClientRequest(method: method, url: url, headers: headers)
+            
+            do {
+                try request.content.encode(json, using: encoder ?? defaultEncoder)
+            }
+            catch {
+                throw ClientRequestError.wrap(error, request)
+            }
+            
+            return send(request)
+                .flatMapThrowing({ response in
+                    try response.content
+                        .decode(Return.self, using: decoder ?? self.defaultDecoder)
+                })
+                .mapErrorToClientRequestError(request: request)
         }
         catch {
-            throw ClientRequestError.wrap(error, request)
+            return eventLoop.makeFailedFuture(error)
         }
-
-        return send(request)
-            .flatMapThrowing({ response in
-                try response.content
-                    .decode(Return.self, using: decoder ?? self.defaultDecoder)
-            })
-            .mapErrorToClientRequestError(request: request)
     }
 
     public func decodeResponseBody<T: Decodable>(request: ClientRequest, response: ClientResponse, decoder: JSONDecoder? = nil) throws -> T {
