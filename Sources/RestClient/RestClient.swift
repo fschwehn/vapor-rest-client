@@ -101,14 +101,14 @@ open class RestClient {
                         query: Query? = nil,
                         headers: HTTPHeaders = HTTPHeaders(),
                         body: ByteBuffer? = nil)
-        -> EventLoopFuture<(ClientRequest, ClientResponse)>
+        -> EventLoopFuture<Void>
     {
         do {
             let uri = try resolve(url: url, query: query)
             let request = ClientRequest(method: method, url: uri, headers: headers, body: body)
             
             return send(request)
-                .map({ response in (request, response) })
+                .transform(to: ())
                 .mapErrorToClientRequestError(request: request)
         }
         catch {
@@ -126,7 +126,7 @@ open class RestClient {
         -> EventLoopFuture<Return>
         where Return: Decodable
     {
-        return request(method: method, url: url, query: query, headers: headers)
+        return sendRequest(method: method, url: url, query: query, headers: headers)
             .flatMapThrowing({ try self.decodeResponseBody(request: $0, response: $1) })
     }
     
@@ -269,15 +269,36 @@ open class RestClient {
     
 }
 
-//// MARK: - private
-//
-//private extension RestClient {
-//
+// MARK: - private
+
+private extension RestClient {
+
 //    static func errorId(_ id: String) -> String {
 //        return "RestClient.\(id)"
 //    }
-//
-//}
+    
+    /// Sends a request and returns a Future tuple of Request and Response
+    private func sendRequest(method: HTTPMethod = .GET,
+                             url: String,
+                             query: Query? = nil,
+                             headers: HTTPHeaders = HTTPHeaders(),
+                             body: ByteBuffer? = nil)
+        -> EventLoopFuture<(ClientRequest, ClientResponse)>
+    {
+        do {
+            let uri = try resolve(url: url, query: query)
+            let request = ClientRequest(method: method, url: uri, headers: headers, body: body)
+            
+            return send(request)
+                .map({ response in (request, response) })
+                .mapErrorToClientRequestError(request: request)
+        }
+        catch {
+            return eventLoop.makeFailedFuture(error)
+        }
+    }
+
+}
 
 // MARK: - Responder
 
