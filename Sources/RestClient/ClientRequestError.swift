@@ -46,20 +46,20 @@ public struct ClientRequestError: LocalizedError {
     }
     
     public var errorDescription: String? {
-        var components = [String]()
+        var components = ["Request Error"]
 
         if let message = message {
             components.append(message)
         }
         
         if let underlyingError = underlyingError {
-            components.append("Underlying error: \(underlyingError)")
+            components.append("• Underlying error: \(underlyingError)")
         }
         
-        components.append("Request: \(request)")
+        components.append("• Request: \(request)")
         
         if let response = response {
-            components.append("Response: \(response)")
+            components.append("• Response: \(response)")
         }
         
         return components.joined(separator: "\n")
