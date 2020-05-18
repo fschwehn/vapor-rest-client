@@ -1,12 +1,12 @@
-// swift-tools-version:5.1
+// swift-tools-version:5.2
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
 
 let package = Package(
-    name: "RestClient",
+    name: "vapor-rest-client",
     platforms: [
-        .macOS(.v10_14)
+        .macOS(.v10_15)
     ],
     products: [
         .library(
@@ -15,14 +15,18 @@ let package = Package(
     ],
     dependencies: [
         // 💧 A server-side Swift web framework.
-        .package(url: "https://github.com/vapor/vapor.git", from: "4.0.0-beta"),
+        .package(url: "https://github.com/vapor/vapor.git", from: "4.0.0-rc"),
     ],
     targets: [
         .target(
             name: "RestClient",
-            dependencies: ["Vapor"]),
+            dependencies: [
+                .product(name: "Vapor", package: "vapor"),
+            ]
+        ),
         .testTarget(
             name: "RestClientTests",
-            dependencies: ["RestClient"]),
+            dependencies: ["RestClient"]
+        ),
     ]
 )

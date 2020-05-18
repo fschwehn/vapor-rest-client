@@ -9,11 +9,16 @@ struct Book: Content, Equatable {
 }
 
 struct TestClient: Client {
+    var eventLoop: EventLoop
     
-    let eventLoopGroup: EventLoopGroup
+    func delegating(to eventLoop: EventLoop) -> Client {
+        var delegated = self
+        delegated.eventLoop = eventLoop
+        return delegated
+    }
     
     init(app: Application) {
-        self.eventLoopGroup = app.eventLoopGroup
+        self.eventLoop = app.eventLoopGroup.next()
     }
     
     func `for`(_ request: Request) -> Client {
@@ -29,7 +34,7 @@ struct TestClient: Client {
                 let book = try request.content.decode(Book.self)
                 var res = ClientResponse()
                 try res.content.encode(book)
-                return eventLoopGroup.future(res)
+                return eventLoop.future(res)
             default:
                 switch request.url.path {
                 case "/ok":
@@ -43,26 +48,26 @@ struct TestClient: Client {
                     var res = ClientResponse(status: .ok)
                     let query = try request.query.decode([String:String].self)
                     try! res.content.encode(query)
-                    return eventLoopGroup.future(res)
+                    return eventLoop.future(res)
                 case "/books/existing":
                     var res = ClientResponse()
                     try! res.content.encode(Book(name: "Swift for Beginners", pages: 42))
-                    return eventLoopGroup.future(res)
+                    return eventLoop.future(res)
                 case "/text":
                     var res = ClientResponse()
                     let text = "read me"
                     try! res.content.encode(text, as: .plainText)
-                    return eventLoopGroup.future(res)
+                    return eventLoop.future(res)
                 default:
                     status = .notFound
                 }
             }
             
             
-            return eventLoopGroup.future(ClientResponse(status: status))
+            return eventLoop.future(ClientResponse(status: status))
         }
         catch {
-            return eventLoopGroup.future(ClientResponse(status: .internalServerError))
+            return eventLoop.future(ClientResponse(status: .internalServerError))
         }
     }
 
