@@ -104,8 +104,7 @@ final class RestClientTests: XCTestCase {
     func test_realClient() throws {
         let client = app.client
         let restClient = RestClient(client: client, hostUrl: URL(string: "https://example.com")!, eventLoop: app.eventLoopGroup.next())
-        let (_, res) = try restClient.request(url: "/").wait()
-        print(res)
+        XCTAssertNoThrow(try restClient.request(url: "/", as: String.self).wait())
     }
     
     func test_send() throws {
@@ -131,8 +130,7 @@ final class RestClientTests: XCTestCase {
     }
     
     func test_200() throws {
-        let (_, res) = try client.request(url: "/ok").wait()
-        XCTAssertEqual(res.status, .ok)
+        XCTAssertNoThrow(try client.request(url: "/ok").wait())
     }
     
     func test_404() throws {
